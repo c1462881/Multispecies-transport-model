@@ -3,18 +3,15 @@
 Python code accompanying the manuscript
 **"Multispecies transport shapes electrochemical environments in perforated cells."**
 
-This repository contains two independent Poisson–Nernst–Planck (PNP)
-simulators used in the paper:
+This repository contains two independent Poisson-Nernst-Planck (PNP)
+simulators that implement the framework developed in the paper.
 
 | Directory  | Model | Backend | Purpose |
 |-----------|-------|---------|---------|
 | `1D_model/` | 1D reductionist PNP | CPU (NumPy/SciPy) | planar-limit, single coordinate normal to the membrane |
 | `3D_model/` | 3D full PNP with explicit pores | GPU (CuPy + custom CUDA kernels) | cytosol / lipid bilayer with cylindrical pores / extracellular bulk |
 
-Both models solve the same governing equations — drift–diffusion for
-four ions (Na⁺, K⁺, Ca²⁺, Cl⁻) and one charged protein species, coupled
-to a variable-permittivity Poisson equation — but at very different
-spatial resolutions and computational cost.
+Both models solve the same governing equations, coupling drift-diffusion transport of four ions (Na⁺, K⁺, Ca²⁺, Cl⁻) and one charged protein species to a variable-permittivity Poisson equation, yet they resolve this shared physics at markedly different spatial scales and computational cost.
 
 ---
 
@@ -74,8 +71,8 @@ pip install cupy-cuda12x            # replace with cupy-cuda11x, etc., to match 
 
 ## Running the 1D reductionist model
 
-All physical, geometrical, and numerical settings live in
-`1D_model/configuration.py`. The typical workflow is:
+All physical, geometrical, and numerical settings reside in
+`1D_model/configuration.py`, and a typical run therefore follows this workflow:
 
 ```bash
 cd 1D_model
@@ -95,8 +92,8 @@ Each run creates a timestamped output folder (e.g. `1D_1423/`) containing:
   `RELOAD_FROM_CHECKPOINT = True` in `main.py` to replot from it without
   re-running the integrator)
 
-Model-free timescale metrics (*t*₁₀ / *t*₅₀ / *t*₉₀ and the integral
-relaxation time *τ*_int) on an existing run can be regenerated with:
+To regenerate model-free timescale metrics (*t*₁₀ / *t*₅₀ / *t*₉₀ and the integral
+relaxation time *τ*_int) on an existing run, call:
 
 ```bash
 python timescale_free.py <path_to_run_folder>
@@ -106,8 +103,8 @@ python timescale_free.py <path_to_run_folder>
 
 ## Running the 3D full model
 
-The 3D model is entirely YAML-driven. A minimal configuration file
-looks like:
+The 3D model runs entirely from a single YAML configuration file. A minimal
+example looks like:
 
 ```yaml
 run:
@@ -143,19 +140,19 @@ Each run creates a directory (default: `<case>_<timestamp>/`) containing:
 
 ### Four pore-opening scenarios
 
-- **Case A** — single central pore.
-- **Case B** — centered *N × N* grid of pores. Setting
-  `pores.tangential: true` places them mouth-to-mouth
-  (spacing = 2·*R*_pore).
-- **Case C** — same grid but shifted entirely to *x > 0*.
-- **Case D** — dynamic pore insertion, triggered either by a fixed
+- **Case A** considers a single central pore.
+- **Case B** places a centered *N × N* grid of pores; setting
+  `pores.tangential: true` positions them mouth to mouth, with spacing
+  equal to 2·*R*_pore.
+- **Case C** uses the same grid but shifts it entirely to *x > 0*.
+- **Case D** inserts pores dynamically, triggered either by a fixed
   time schedule (`dyn_trigger: schedule`) or by a positive-feedback
-  rule on cumulative K⁺ efflux (`dyn_trigger: k_efflux`).
+  rule that responds to cumulative K⁺ efflux (`dyn_trigger: k_efflux`).
 
-Whenever a new pore opens (Case D), all masks and the Poisson operator
-are rebuilt, concentrations in newly opened voxels are re-seeded from
-the smooth initial profile, and local Cl⁻ electroneutrality is
-re-enforced.
+Whenever a new pore opens under Case D, the simulation rebuilds all masks and
+the Poisson operator, reseeds concentrations in the newly opened voxels from
+the smooth initial profile, and re-enforces local Cl⁻ electroneutrality
+there.
 
 ### Post-processing (videos and trajectory plots)
 
@@ -173,14 +170,15 @@ It produces:
 - `trajectory.png` and `trajectory.svg`
 - `trajectory_field_ranges.csv`
 
-Rendering behaviour (crop, colormap, out-of-range coloring, osmolarity
-averaging window, per-frame SVG output, parallel NPZ reads, etc.) can be
-tuned via CLI flags such as `--cmap rwb`, `--crop saved`,
-`--osm-x-range-nm ...`, `--svg`, `--workers 8`. Finer control of color
-limits, y-limits for trajectory panels, display domain, and overlay
-toggles is available by placing a `plot_limits.json` inside the run
-folder; a template is printed to stdout the first time
-`visualization.py` runs without one. Run
+CLI flags such as `--cmap rwb`, `--crop saved`, `--osm-x-range-nm ...`,
+`--svg`, and `--workers 8` tune rendering behaviour, including crop,
+colormap, out-of-range coloring, osmolarity averaging window, per-frame
+SVG output, and parallel NPZ reads. Placing a `plot_limits.json` file
+inside the run folder grants finer control over color limits, y-limits
+for trajectory panels, display domain, and overlay toggles; running
+`visualization.py` without one prints a template to stdout on first use.
+
+Run
 
 ```bash
 python visualization.py --help
