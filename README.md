@@ -1,187 +1,198 @@
-# Multispecies transport: 1D reductionist and 3D full PNP models
+# Multispecies transport PNP models
 
 Python code accompanying the manuscript
 **"Multispecies transport shapes electrochemical environments in perforated cells."**
 
-This repository contains two independent Poisson-Nernst-Planck (PNP)
-simulators that implement the framework developed in the paper.
+This repository contains the Python implementations used for the reductionist
+one-dimensional model and the full three-dimensional pore-resolved model
+described in the accompanying paper.
 
-| Directory  | Model | Backend | Purpose |
-|-----------|-------|---------|---------|
-| `1D_model/` | 1D reductionist PNP | CPU (NumPy/SciPy) | planar-limit, single coordinate normal to the membrane |
-| `3D_model/` | 3D full PNP with explicit pores | GPU (CuPy + custom CUDA kernels) | cytosol / lipid bilayer with cylindrical pores / extracellular bulk |
+## Repository structure
 
-Both models solve the same governing equations, coupling drift-diffusion transport of four ions (Na⁺, K⁺, Ca²⁺, Cl⁻) and one charged protein species to a variable-permittivity Poisson equation, yet they resolve this shared physics at markedly different spatial scales and computational cost.
-
----
-
-## Repository layout
-
-```
+```text
 .
 ├── 1D_model/
-│   ├── configuration.py       # all parameters (edit here)
-│   ├── initialization.py      # grid, initial fields, resting-potential imposition, Donnan reference
-│   ├── solver.py              # Scharfetter–Gummel fluxes + RK45 time integration
-│   ├── main.py                # entry point (runs a single simulation)
-│   ├── visualization.py       # spatial/temporal figures + timescale panel
-│   ├── timescale_fit.py       # first-order relaxation fits (shared with main)
-│   └── timescale_free.py      # model-free fractional-crossing times on a saved run
-│
+│   ├── configuration.py
+│   ├── initialization.py
+│   ├── solver.py
+│   ├── main.py
+│   ├── visualization.py
+│   ├── timescale_fit.py
+│   └── timescale_free.py
 ├── 3D_model/
-│   ├── configuration.py       # YAML schema, defaults, ion/protein defaults, validation
-│   ├── initialization.py      # mesh, pores, masks, Poisson solver assembly, initial state
-│   ├── solver.py              # CUDA kernels: Scharfetter–Gummel, batched Thomas, PCG Poisson
-│   ├── time_loop.py           # adaptive time loop, dynamic pores, diagnostics, NPZ/VTR I/O
-│   ├── output.py              # logger, timers, VTR writer, params/CSV writers
-│   ├── main.py                # entry point (YAML-driven)
-│   └── visualization.py       # NPZ → MP4 videos + trajectory plots (post-processing)
-│
+│   ├── configuration.py
+│   ├── initialization.py
+│   ├── solver.py
+│   ├── time_loop.py
+│   ├── output.py
+│   ├── main.py
+│   └── visualization.py
 └── README.md
 ```
 
----
+## Reductionist one-dimensional model
 
-## Requirements
+The reductionist model solves a one-dimensional Poisson–Nernst–Planck system
+normal to a planar membrane. It includes four physiological ions, a charged
+protein, and auxiliary charged and neutral species used to initialize
+electroneutral and osmotically balanced reservoirs. The membrane potential is
+obtained from Poisson's equation at every transport right-hand-side evaluation.
 
-### 1D model (CPU)
+### Scripts
 
-- Python ≥ 3.9
-- `numpy`, `scipy`, `matplotlib`, `pandas`
+- `configuration.py`: physical constants, species properties, geometry,
+  simulation duration, output settings, and plotting styles.
+- `initialization.py`: grid and membrane masks, diffusivity and mobility fields,
+  auxiliary-species concentrations, resting-potential initialization, and
+  Donnan reference calculation.
+- `solver.py`: Poisson solve, Scharfetter–Gummel ion fluxes, protein flux,
+  positivity limiting, and time integration.
+- `main.py`: simulation entry point, diagnostics, checkpointing, plotting, and
+  CSV export.
+- `visualization.py`: spatial and temporal figures and monitor-point extraction.
+- `timescale_fit.py`: exponential-relaxation fitting and theoretical timescale
+  diagnostics used by `main.py`.
+- `timescale_free.py`: post-processing of exported temporal data using
+  model-free crossing and finite-window integral metrics.
+
+### Requirements
+
+- Python 3.10 or newer
+- NumPy
+- SciPy
+- pandas
+- Matplotlib
+
+Install the CPU-model dependencies with:
 
 ```bash
-pip install numpy scipy matplotlib pandas
+python -m pip install numpy scipy pandas matplotlib
 ```
 
-### 3D model (GPU)
+### Run
 
-- Python ≥ 3.9
-- NVIDIA GPU with a CUDA-compatible driver
-  (tested on an NVIDIA RTX PRO 4500 Blackwell, CUDA 12.x)
-- `cupy` matching your CUDA version
-- `numpy`, `pyyaml`, `matplotlib`, `pandas`
-- `ffmpeg` available on `PATH` (only needed by `visualization.py` for MP4 encoding)
+Run commands from the model directory because the scripts use local imports:
 
 ```bash
-pip install numpy pyyaml matplotlib pandas
-pip install cupy-cuda12x            # replace with cupy-cuda11x, etc., to match local CUDA
-```
-
----
-
-## Running the 1D reductionist model
-
-All physical, geometrical, and numerical settings reside in
-`1D_model/configuration.py`, and a typical run therefore follows this workflow:
-
-```bash
-cd 1D_model
-# (optional) edit configuration.py: SIM_T, ion concentrations, V_REST_MV, ...
+cd reductionist_model
 python main.py
 ```
 
-Each run creates a timestamped output folder (e.g. `1D_1423/`) containing:
-
-- `Spatial_final.svg`, `Temporal_all.svg`, `Donnan_convergence.svg`,
-  `Timescales_difference.svg`
-- `Spatial_datapoints.csv`, `Spatial_snapshots.csv`,
-  `Temporal_datapoints.csv`
-- `Parameters_and_Data.csv` — full parameter provenance
-- `run_log.txt`
-- `sol_checkpoint.pkl` — solution checkpoint (set
-  `RELOAD_FROM_CHECKPOINT = True` in `main.py` to replot from it without
-  re-running the integrator)
-
-To regenerate model-free timescale metrics (*t*₁₀ / *t*₅₀ / *t*₉₀ and the integral
-relaxation time *τ*_int) on an existing run, call:
+Parameters are set directly in `configuration.py`. Each run creates a
+time-stamped output directory containing logs, a checkpoint, figures, parameter
+tables, and spatial and temporal CSV files. To analyze an existing output
+directory with the model-free timescale script:
 
 ```bash
-python timescale_free.py <path_to_run_folder>
+python timescale_free.py PATH_TO_OUTPUT_DIRECTORY
 ```
 
----
+The supplied implementation calls SciPy's explicit `RK45` integrator directly.
+The configured names `SOLVER_METHOD`, `JAC_BW`, `N_DEBYE_LAYERS`, and
+`V_REST_MAX_ITER` do not change that implementation as supplied.
 
-## Running the 3D full model
+## Full three-dimensional pore-resolved model
 
-The 3D model runs entirely from a single YAML configuration file. A minimal
-example looks like:
+The full model solves multispecies electrodiffusion on a nonuniform
+three-dimensional Cartesian grid with an explicit membrane and cylindrical
+pores. It supports protein crowding, steric transport gates, static or
+sequentially inserted pores, a variable-permittivity Poisson solve, and
+GPU-accelerated Scharfetter–Gummel transport.
+
+### Scripts
+
+- `configuration.py`: default configuration, YAML overrides, validation,
+  physical constants, ion and protein definitions, mesh generation, and pore
+  placement utilities.
+- `initialization.py`: GPU selection, grid and mask construction, field
+  initialization, resting-potential preparation, Poisson setup, and state
+  assembly.
+- `solver.py`: convolution utilities, crowding fields, fused
+  Scharfetter–Gummel kernels, electric-field calculation, and the
+  preconditioned-conjugate-gradient Poisson solver.
+- `time_loop.py`: explicit time stepping, adaptive step schedule, sequential
+  pore insertion, convergence checks, diagnostics, and state output.
+- `output.py`: run directories, logging and timing, parameter export, trajectory
+  CSV output, and binary VTK rectilinear-grid output.
+- `main.py`: YAML-driven command-line entry point.
+- `visualization.py`: trajectory plots, field ranges, cross-sectional frames,
+  and optional MP4 video generation from saved states.
+
+### Requirements
+
+- Python 3.10 or newer
+- An NVIDIA GPU with a compatible CUDA driver
+- CuPy built for the installed CUDA version
+- NumPy
+- SciPy
+- PyYAML
+- Matplotlib
+- FFmpeg, only when generating MP4 videos
+
+Install the Python dependencies after selecting the appropriate CuPy package
+for the local CUDA installation. For example, for a CUDA 12 installation:
+
+```bash
+python -m pip install cupy-cuda12x numpy scipy pyyaml matplotlib
+```
+
+### Configure and run
+
+The full model requires a YAML file. Unspecified values are filled from
+`DEFAULT_CONFIG` in `configuration.py`; therefore, a file containing only
+`{}` runs the default case.
+
+```bash
+cd full_model
+printf '{}\n' > config.yaml
+python main.py --config config.yaml
+```
+
+A minimal override may instead be written as:
 
 ```yaml
 run:
-  case: A               # A: single pore, B: grid, C: shifted cluster, D: dynamic insertion
+  case: A
   gpu: 0
-  out: my_run
-  dtype: float32
+  out: out_gsdmd
 
-domain:  {Lx_nm: 1000, Ly_nm: 1000, Lcyto_nm: 1000, Lbulk_nm: 1000, Lmem_nm: 4}
-physics: {Rpore_nm: 10.75, sigma_wall: -0.02, v_rest: -0.075,
-          Cprot_mM: 1.0, zprot: -10, Rprot_nm: 5.0}
-pores:   {n_pores: 1}
-time:    {dt: 2.5e-12, t_final: 1.0e-8, t_resolve_ns: 50.0, dt_growth: 1.03}
-output:  {save_number: 200}
+time:
+  t_final: 1.0e-8
+
+output:
+  save_number: 200
+  vtk_number: 0
 ```
 
-Then:
+Cases `A`, `B`, and `C` define static pore arrangements. Case `D` enables
+sequential pore insertion according to a schedule or a cumulative potassium
+efflux threshold. See `DEFAULT_CONFIG` and its inline comments for all
+available parameters.
+
+To generate plots or videos after a run:
 
 ```bash
-cd 3D_model
-python main.py --config my_config.yaml
+python visualization.py PATH_TO_OUTPUT_DIRECTORY
 ```
 
-Each run creates a directory (default: `<case>_<timestamp>/`) containing:
+Use `python visualization.py --help` for cropping, limit, parallelism, and
+video options. Video generation additionally requires `ffmpeg` on the system
+path.
 
-- `params.json` — full provenance (config, mesh, pore list, dynamic
-  events, ions, protein species, etc.)
-- `trajectory.csv` — per-print row of *V*_m, currents, per-species
-  cumulative efflux, protein leakage, and total charge
-- `npz_frames/state_*******.npz` — 3D field snapshots on the ROI
-- `vtk/fields_*******.vtr` — optional full-domain VTR fields
-- `sanity.txt` — everything printed to stdout during the run
+## Outputs
 
-### Four pore-opening scenarios
+The reductionist model writes figures and CSV summaries directly to its run
+directory. The full model writes logs and parameters together with compressed
+NPZ state files, optional VTK rectilinear-grid files, and a trajectory CSV.
+Output volume can be controlled with the corresponding configuration settings.
 
-- **Case A** considers a single central pore.
-- **Case B** places a centered *N × N* grid of pores; setting
-  `pores.tangential: true` positions them mouth to mouth, with spacing
-  equal to 2·*R*_pore.
-- **Case C** uses the same grid but shifts it entirely to *x > 0*.
-- **Case D** inserts pores dynamically, triggered either by a fixed
-  time schedule (`dyn_trigger: schedule`) or by a positive-feedback
-  rule that responds to cumulative K⁺ efflux (`dyn_trigger: k_efflux`).
+## Citation
 
-Whenever a new pore opens under Case D, the simulation rebuilds all masks and
-the Poisson operator, reseeds concentrations in the newly opened voxels from
-the smooth initial profile, and re-enforces local Cl⁻ electroneutrality
-there.
+If you use this code, please cite the accompanying paper. Replace this section
+with the final article citation and DOI when available.
 
-### Post-processing (videos and trajectory plots)
+## License
 
-`visualization.py` turns the NPZ frame stream into publication-ready
-plots and MP4s:
+No license was included with the supplied scripts. Add an explicit license
+before public release so reuse conditions are clear.
 
-```bash
-python visualization.py <run_folder>
-```
-
-It produces:
-
-- `videos/ions.mp4`, `videos/electrostatics.mp4`,
-  `videos/osm_and_protein.mp4`
-- `trajectory.png` and `trajectory.svg`
-- `trajectory_field_ranges.csv`
-
-CLI flags such as `--cmap rwb`, `--crop saved`, `--osm-x-range-nm ...`,
-`--svg`, and `--workers 8` tune rendering behaviour, including crop,
-colormap, out-of-range coloring, osmolarity averaging window, per-frame
-SVG output, and parallel NPZ reads. Placing a `plot_limits.json` file
-inside the run folder grants finer control over color limits, y-limits
-for trajectory panels, display domain, and overlay toggles; running
-`visualization.py` without one prints a template to stdout on first use.
-
-Run
-
-```bash
-python visualization.py --help
-```
-
-for the full list of options.
