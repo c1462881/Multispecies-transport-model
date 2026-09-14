@@ -1,4 +1,4 @@
-# Multispecies transport PNP models
+# Multispecies transport model
 
 Python code accompanying the manuscript
 **"Multispecies transport shapes electrochemical environments in perforated cells."**
